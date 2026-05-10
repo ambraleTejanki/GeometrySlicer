@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Geometry Slicer</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="glCanvas" aria-label="Geometry Slicer viewport"></canvas>
+      <section id="titleScreen" class="title-screen">
+        <div class="title-copy">
+          <p class="eyebrow">Raw WebGL2</p>
+          <h1>Geometry Slicer</h1>
+          <p>Cut primitive meshes with mouse gestures, then grab and move the resulting parts in real time.</p>
+          <button id="startButton" type="button">Start</button>
+        </div>
+      </section>
+      <div id="hud" class="hud" hidden>
+        <div class="hud-row">
+          <span class="label">Mode</span>
+          <strong id="modeLabel">Navigate</strong>
+        </div>
+        <div class="hud-row">
+          <span class="label">Shape</span>
+          <select id="shapeSelect" aria-label="Shape switcher">
+            <option value="cube">Cube</option>
+            <option value="sphere">Sphere</option>
+            <option value="cylinder">Cylinder</option>
+            <option value="torus">Torus</option>
+          </select>
+        </div>
+        <button id="modeButton" type="button">Enter Cut</button>
+        <button id="resetButton" type="button">Reset Shape</button>
+      </div>
+      <div id="help" class="help" hidden>
+        <span>Navigate: left drag orbit, right drag pan, wheel zoom</span>
+        <span>Cut: drag across mesh</span>
+        <span>Move parts: click and drag after slicing</span>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
