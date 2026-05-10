@@ -1,58 +1,56 @@
 # Geometry Slicer
 
-Geometry Slicer is a small desktop-style 3D editing tool made with **raw WebGL2**, **TypeScript**, **Vite**, and **glMatrix**. The user can open the tool, choose a primitive shape, draw a cut across the mesh, and then move the separated pieces.
+Geometry Slicer is my WebGL2-based 3D mesh cutting assignment. I built it as a small desktop-style editor where I can choose a primitive shape, draw a cut across it with the mouse, and then move the separated pieces.
 
-This project does not use Three.js, Babylon.js, physics engines, or any external slicing library. The slicing logic is implemented manually in TypeScript.
+I used **raw WebGL2**, **TypeScript**, **Vite**, and **glMatrix**. I did not use Three.js, Babylon.js, physics engines, or any external slicing library.
 
-## Framework / Approach Used
+## Approach
 
-I used **raw WebGL2** as the rendering approach.
+I chose the raw WebGL2 path for this assignment. Since the brief allows primitive shapes for raw WebGL/OpenGL submissions, I used generated shapes instead of loading GLTF models.
 
-Because this version uses raw WebGL2, the demo uses primitive shapes instead of GLTF models. The available shapes are:
+The current shapes are:
 
 - Cube
 - Sphere
 - Cylinder
 - Torus
 
-The project uses **Vite** as the modern build tool and dev server.
+The project is bundled with Vite and written in TypeScript.
 
-## Shading Model
+## Shading
 
-The renderer uses a custom **Phong-style lighting model**.
+I used a custom Phong-style shader.
 
-The shader includes:
+The lighting includes:
 
 - Ambient light
 - Directional diffuse light
 - Specular highlight
-- A small rim light to make the mesh edges easier to see
-- Double-sided rendering so the inside faces after a cut are visible
+- A small rim light so the mesh edges are easier to read
+- Double-sided rendering so the inside faces of a cut are visible
 
-This keeps the visual style clear and useful for a 3D editing tool while staying fully inside raw WebGL2.
+I kept the shading simple because the main goal of the assignment is the cutting system, not a full material system.
 
-## Third-Party Libraries
+## Libraries Used
 
-The only runtime math library used is:
+I used **glMatrix** for math.
 
-- **glMatrix**
+It handles:
 
-glMatrix is used for:
-
-- Vector math
-- Matrix math
+- Vector operations
+- Matrix operations
 - Camera view and projection matrices
-- Inverse view-projection matrix for raycasting
+- Raycasting math
 - Plane calculations
 - Mesh transform calculations
 
-It is installed through npm, so no separate `.js` file is needed.
+glMatrix is installed through npm, so there is no separate `.js` file for it.
 
 ```ts
 import { mat4, vec3 } from "gl-matrix";
 ```
 
-## How To Run
+## Running The Project
 
 Install dependencies:
 
@@ -60,7 +58,7 @@ Install dependencies:
 npm install
 ```
 
-Start the local dev server:
+Start the local server:
 
 ```bash
 npm run dev
@@ -74,173 +72,159 @@ npm run build
 
 ## Controls
 
-- Click **Start** to enter the tool.
+- Click **Start** to open the editor.
 - In **Navigate** mode:
   - Left mouse drag rotates the camera.
   - Right mouse drag pans the camera.
   - Mouse wheel zooms in and out.
 - In **Cut** mode:
-  - Drag across the mesh to create a cut preview.
-  - Release the mouse to cut the mesh.
+  - Drag across the mesh to preview the cut.
+  - Release the mouse to apply the cut.
 - After cutting:
   - Click and drag a piece to move it.
-- Use the shape dropdown to switch between cube, sphere, cylinder, and torus.
+- Use the shape dropdown to switch between shapes.
 - Press `C` to switch between Navigate and Cut mode.
-- Press `Escape` to cancel cut mode.
+- Press `Escape` to cancel the current cut state.
 
-## Geometry Slicing Approach
+## How The Cutting Works
 
-The slicing system is built around a generic mesh cutter. It does not contain special logic for cube, sphere, cylinder, or torus. Any mesh that provides positions, normals, and indices can be passed into the cutter.
+The cutting system is written as a generic mesh operation. It does not have special code for cube, sphere, cylinder, or torus. As long as a mesh has positions, normals, and indices, the cutter can work with it.
 
-### 1. How The Cutting Plane Is Derived
+### Creating The Cutting Plane
 
-When the user drags the mouse in Cut mode, the start and end mouse positions are converted into 3D rays.
+When I drag the mouse in Cut mode, I convert the start and end mouse positions into world-space rays.
 
-This is done by:
+The steps are:
 
-1. Reading the mouse position in screen space.
-2. Converting it to normalized device coordinates.
-3. Using the camera inverse view-projection matrix to create a world-space ray.
-4. Creating a plane from the camera position and the two drag rays.
+1. Read the mouse position on the screen.
+2. Convert it to normalized device coordinates.
+3. Use the camera inverse view-projection matrix to create a 3D ray.
+4. Build a cutting plane from the camera position and the two drag rays.
 
-This makes the cut feel like it follows the user's 2D drag gesture across the 3D object.
+This makes the cut follow the direction of the mouse stroke in the viewport.
 
-### 2. How Vertices Are Classified
+### Classifying Vertices
 
-Each triangle is tested against the cutting plane.
+For each triangle, I test its vertices against the cutting plane.
 
-For every vertex, the cutter calculates signed distance:
+I calculate signed distance like this:
 
 ```text
 distance = dot(planeNormal, vertexPosition) + planeConstant
 ```
 
-- If the distance is positive, the vertex is on one side of the plane.
-- If the distance is negative, the vertex is on the other side.
-- If the distance is close to zero, the vertex is treated as being on the plane.
+- Positive distance means the vertex is on one side of the plane.
+- Negative distance means the vertex is on the other side.
+- A very small distance is treated as being on the plane.
 
-Triangles that are fully on one side are copied to that side. Triangles that cross the plane are clipped.
+Triangles fully on one side are copied to that side. Triangles that cross the plane are clipped.
 
-### 3. How The Mesh Is Split
+### Splitting The Mesh
 
-For triangles that cross the plane, the cutter finds the intersection points along triangle edges.
+When a triangle crosses the cutting plane, I find where its edges intersect the plane. Then I rebuild the triangle pieces on both sides of the cut.
 
-The triangle is then clipped into new polygons for both sides of the cut. Those polygons are triangulated and stored as new geometry.
+At the end of this step, one mesh part becomes two mesh parts.
 
-After this step, the original mesh becomes two separate mesh parts.
+### Creating The Caps
 
-### 4. How Caps Are Generated
+A cut leaves an open surface, so I close it with a cap.
 
-Cutting a mesh creates an open hole along the cut surface. To close that hole, the cutter collects all edge-plane intersection points.
+For the cap, I:
 
-The cap generation process is:
-
-1. Collect intersection points from clipped triangles.
+1. Collect all edge-plane intersection points.
 2. Remove duplicate points.
-3. Find the center of the points.
-4. Sort points around the center.
-5. Create triangles from the center to the sorted edge points.
-6. Recalculate normals so the new cap is lit correctly.
+3. Find the center of those points.
+4. Sort the points around the center.
+5. Create a triangle fan from the center.
+6. Recalculate normals so the cap is lit correctly.
 
-This creates visible cut faces instead of leaving the mesh hollow.
+This makes the cut face visible instead of leaving the mesh hollow.
 
-## System Architecture
+## Code Structure
 
-The project is separated into small systems so the code is easier to understand and extend.
+I split the project into small systems so each file has a clear job.
 
 ### `App`
 
-`App` connects the UI with the engine systems. It creates the renderer, camera, cut manager, shape switcher, and animation loop.
-
-It does not perform slicing directly.
+This connects the UI with the engine code. It creates the renderer, camera, cut manager, shape switcher, and render loop.
 
 ### `Renderer`
 
-`Renderer` owns all WebGL2 work:
+This owns the WebGL2 work:
 
-- Shader creation
-- Mesh buffers
+- Shaders
+- Buffers
 - Grid drawing
 - Mesh drawing
 - Cut preview drawing
 
-The renderer only receives mesh parts and draws them. It does not know how the mesh was cut.
+The renderer only draws mesh parts. It does not know how the mesh was cut.
 
 ### `OrbitCamera`
 
-`OrbitCamera` handles:
+This handles orbit, pan, zoom, and camera matrices.
 
-- Orbit
-- Pan
-- Zoom
-- View matrix
-- Projection matrix
-- Inverse view-projection matrix
-
-The inverse view-projection matrix is important because it is used to turn mouse positions into 3D rays.
+It also creates the inverse view-projection matrix, which is needed for raycasting from the mouse.
 
 ### `PointerController`
 
-`PointerController` converts mouse and pointer events into actions.
+This turns pointer input into actions.
 
-It decides whether the user is:
+It handles:
 
-- Navigating the scene
-- Drawing a cut
-- Dragging a sliced mesh part
-
-It forwards cut gestures to `CutManager`.
+- Orbiting and panning
+- Starting a cut gesture
+- Updating the cut preview
+- Dragging sliced parts
 
 ### `CutManager`
 
-`CutManager` is the central class for slicing behavior.
+This is the main class for cut state.
 
 It handles:
 
-- Current mode: Navigate or Cut
-- Cut preview state
-- Creating the cutting plane
+- Navigate and Cut mode
+- Cut preview data
+- Cutting plane creation
 - Calling `MeshCutter`
-- Replacing one mesh part with the new sliced parts
+- Replacing the original part with the sliced parts
 
-This keeps cutting logic out of the UI and rendering code.
+I kept this separate so the UI does not contain geometry-cutting logic.
 
 ### `MeshCutter`
 
-`MeshCutter` performs the actual geometry operation.
+This performs the actual slicing.
 
 It handles:
 
-- Plane transform into local mesh space
-- Vertex classification
-- Triangle clipping
-- Cap point collection
-- Cap triangulation
-- Normal recalculation
-- Returning new independent mesh parts
-
-This is the main geometry system in the project.
+- Transforming the plane into local mesh space
+- Classifying vertices
+- Clipping triangles
+- Collecting cap points
+- Building cap faces
+- Recalculating normals
+- Returning new mesh parts
 
 ## Tradeoffs
 
-This project focuses on a working and understandable raw WebGL2 implementation.
+I focused on making a working raw WebGL2 version that is easy to understand and review.
 
-The main simplification is cap generation. It works well for the included primitive shapes and simple cuts, but it is not a full CAD-grade mesh boolean system.
+The biggest simplification is the cap generation. It works well for the included primitive shapes and normal cuts, but it is not a full CAD-style boolean system.
 
-If I had more time, I would improve:
+With more time, I would add:
 
-- Exact triangle-based picking instead of bounding-sphere picking
-- More robust cap generation for complex concave cuts
-- Support for multiple cap loops
-- Better drag planes for moving parts in any camera direction
+- More accurate triangle picking
+- Stronger cap triangulation for complex cuts
+- Support for multiple cut loops
 - Undo and redo
-- Visual highlighting of the piece under the mouse
+- Better part highlighting
+- A more flexible drag plane for moving parts
 
 ## Scaling
 
-The cutting system is generic, so adding more shapes does not require changing `MeshCutter`.
+The cutter is generic, so adding more shapes does not require changing the slicing code.
 
-To support 20 different shapes, each shape only needs to produce the same geometry format:
+To add more shapes, each shape only needs to output:
 
 ```ts
 positions: Float32Array
@@ -248,63 +232,68 @@ normals: Float32Array
 indices: Uint32Array
 ```
 
-After that, the same renderer, raycasting, cut manager, and mesh cutter can work with it.
+After that, the same renderer, raycasting, cut manager, and mesh cutter can be reused.
 
-For a larger version of this tool, I would add:
+If I had to support many more shapes or heavier meshes, I would add:
 
-- A shape/model registry
-- Lazy loading for heavier meshes
+- A shape registry
+- Lazy loading
 - Geometry validation before slicing
-- A better picking acceleration structure
-- Optional worker-thread slicing for large meshes
+- Faster picking
+- Web Worker slicing for large meshes
 
-## Performance Notes
+## Performance
 
-The most expensive part is slicing the mesh on the CPU.
+The most expensive work happens on the CPU when a mesh is sliced.
 
-The main performance concerns are:
+The main costs are:
 
-- Classifying many triangles
+- Checking every triangle against the plane
 - Clipping triangles that cross the plane
-- Rebuilding cap geometry
-- Re-uploading changed geometry to the GPU
+- Building the cap
+- Uploading new geometry to the GPU
 
-For this assignment, the primitive meshes are kept at a reasonable size, so slicing is responsive.
+For this assignment, the mesh sizes are small enough that the cuts feel responsive.
 
-To improve performance for bigger meshes, I would add:
+For larger meshes, I would improve this with:
 
 - Bounding checks before slicing
 - Spatial partitioning
-- Web Workers for slicing
-- More efficient GPU buffer reuse
-- Mesh simplification or level-of-detail for very dense models
+- Worker-thread slicing
+- Better GPU buffer reuse
 
-## Known Issues / Incomplete Areas
+## Known Issues
 
-- Cap generation is designed for simple cut loops. Very complex concave cuts may need a stronger triangulation method.
+- Cap generation is made for simple cut loops. Very complex concave cuts may need a stronger triangulation method.
 - Picking uses bounding spheres, so it is fast but not perfectly precise.
 - Dragging moves parts across the floor plane only.
-- There is no undo or redo system yet.
-- This raw WebGL2 version uses primitive shapes, which matches the assignment rule for raw WebGL/OpenGL submissions.
+- There is no undo or redo yet.
+- This raw WebGL2 version uses primitive shapes instead of GLTF models, as allowed by the assignment.
 
 ## Submission Notes
 
-For the GitHub submission:
+For GitHub, I would include:
 
-- Include the full TypeScript source.
-- Include `package.json` and `package-lock.json`.
-- Do not include `node_modules`.
-- Do not include build artifacts like `dist` unless the reviewer specifically asks for them.
+- Full TypeScript source
+- `package.json`
+- `package-lock.json`
+- README
 
-For the final assignment submission:
+I would not include:
 
-- Push the project to GitHub.
-- Deploy it on Vercel or Netlify.
-- Record a 2-3 minute screen recording showing:
+- `node_modules`
+- `dist`
+- Other generated build files
+
+For the final submission, I would provide:
+
+- GitHub repository link
+- Live Vercel or Netlify link
+- A 2-3 minute screen recording showing:
   - Opening the tool
-  - Selecting or spawning a primitive shape
-  - Drawing a cut gesture
-  - Mesh splitting into independent parts
+  - Selecting a shape
+  - Drawing a cut
+  - Mesh splitting into separate parts
   - Dragging a sliced part
   - Switching to another shape
   - Repeating the cut
