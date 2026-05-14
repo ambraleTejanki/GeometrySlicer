@@ -6,7 +6,7 @@ I used **raw WebGL2**, **TypeScript**, **Vite**, and **glMatrix**. I did not use
 
 ## Approach
 
-I chose the raw WebGL2 path for this assignment. Since the brief allows primitive shapes for raw WebGL/OpenGL submissions, I used generated shapes instead of loading GLTF models.
+I chose the raw WebGL2 path for this assignment. 
 
 The current shapes are:
 
@@ -29,7 +29,7 @@ The lighting includes:
 - A small rim light so the mesh edges are easier to read
 - Double-sided rendering so the inside faces of a cut are visible
 
-I kept the shading simple because the main goal of the assignment is the cutting system, not a full material system.
+I kept the shading simple because the main goal of the assignment is the cutting system.
 
 ## Libraries Used
 
@@ -207,7 +207,7 @@ It handles:
 
 ## Tradeoffs
 
-I focused on making a working raw WebGL2 version that is easy to understand and review.
+I focused on making a working raw WebGL2 version that is easy to understand .
 
 The biggest simplification is the cap generation. It works well for the included primitive shapes and normal cuts, but it is not a full CAD-style boolean system.
 
