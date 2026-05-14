@@ -1,3 +1,8 @@
+/*
+logic for Object Picking—the ability to click on a 3D object using a 2D mouse cursor. 
+It works by "shooting" an invisible mathematical ray from your eye, through the pixel you clicked, and into the 3D world to see what it hits.
+*/
+
 import { mat4, vec3, vec4 } from "gl-matrix";
 import type { CameraState, MeshPart, Ray } from "./types";
 import { transformedCenter } from "./geometryUtils";

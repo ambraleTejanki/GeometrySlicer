@@ -7,7 +7,9 @@
   </head>
   <body>
     <div id="app">
+      <!--  The WebGL canvas — the entire 3D viewport -->
       <canvas id="glCanvas" aria-label="Geometry Slicer viewport"></canvas>
+      <!--  Title screen — shown first, hidden after Start is clicked -->
       <section id="titleScreen" class="title-screen">
         <div class="title-copy">
           <p class="eyebrow">Raw WebGL2</p>
@@ -16,6 +18,7 @@
           <button id="startButton" type="button">Start</button>
         </div>
       </section>
+      <!--  HUD — shown after Start, contains all controls -->
       <div id="hud" class="hud" hidden>
         <div class="hud-row">
           <span class="label">Mode</span>
@@ -23,14 +26,14 @@
         </div>
         <div class="hud-row">
           <span class="label">Shape</span>
-          <select id="shapeSelect" aria-label="Shape switcher">
+          <select id="shapeSelect" aria-label="Shape switcher">      <!-- shape switcher -->
             <option value="cube">Cube</option>
             <option value="sphere">Sphere</option>
             <option value="cylinder">Cylinder</option>
             <option value="torus">Torus</option>
           </select>
         </div>
-        <button id="modeButton" type="button">Enter Cut</button>
+        <button id="modeButton" type="button">Enter Cut</button>      <!-- toggles Navigate/Cut -->
         <button id="resetButton" type="button">Reset Shape</button>
       </div>
       <div id="help" class="help" hidden>
@@ -39,6 +42,6 @@
         <span>Move parts: click and drag after slicing</span>
       </div>
     </div>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/main.ts"></script>  <!-- Vite picks up the TypeScript entry point -->
   </body>
 </html>

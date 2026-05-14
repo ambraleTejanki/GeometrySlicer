@@ -12,6 +12,9 @@ export class OrbitCamera {
   private inverseViewProjection = mat4.create();
   private position = vec3.create();
 
+  /*
+  updates the camera's position and recalculates its math matrices every frame
+  */
   state(aspect: number): CameraState {
     this.pitch = Math.max(-1.32, Math.min(1.32, this.pitch));
     this.distance = Math.max(2.25, Math.min(18, this.distance));
@@ -25,7 +28,7 @@ export class OrbitCamera {
     mat4.lookAt(this.view, this.position, this.target, vec3.fromValues(0, 1, 0));
     mat4.perspective(this.projection, Math.PI / 4, aspect, 0.05, 100);
     mat4.multiply(this.viewProjection, this.projection, this.view);
-    mat4.invert(this.inverseViewProjection, this.viewProjection);
+    mat4.invert(this.inverseViewProjection, this.viewProjection); //useful for "un-projecting" mouse clicks from the 2D screen back into the 3D world
     return {
       view: this.view,
       projection: this.projection,

@@ -1,6 +1,13 @@
 import { mat4, vec3 } from "gl-matrix";
 import type { Bounds, MeshGeometry, MeshPart } from "./types";
 
+// helper functions
+
+/*
+Calculates bounding sphere , used for culling 
+It finds the exact middle of a 3D shape by averaging the coordinates of all its 
+vertices. Then, it finds the point furthest away from that center to determine a "radius".
+*/
 export function computeBounds(geometry: MeshGeometry): Bounds {
   const center = vec3.create();
   const p = geometry.positions;
@@ -21,6 +28,7 @@ export function computeBounds(geometry: MeshGeometry): Bounds {
   return { center, radius };
 }
 
+// rebuilds normals after slicing or cap generation
 export function recalculateNormals(positions: number[], indices: number[]): Float32Array {
   const normals = new Float32Array(positions.length);
   const a = vec3.create();
@@ -78,6 +86,11 @@ export function compactGeometry(positions: number[], indices: number[]): MeshGeo
   };
 }
 
+/*
+This function calculates where the center of the object actually is in the world 
+right now after it has been moved, rotated, or scaled
+local space -> world space
+*/
 export function transformedCenter(part: MeshPart): vec3 {
   return vec3.transformMat4(vec3.create(), part.bounds.center, part.modelMatrix);
 }

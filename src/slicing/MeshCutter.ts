@@ -12,19 +12,19 @@ interface ClipResult {
 export class MeshCutter {
   private epsilon = 1e-5;
 
+  // Cut a mesh part using a world-space plane and return two new mesh parts.
   cut(part: MeshPart, worldPlane: Plane, nextId: () => number): MeshPart[] {
-    // The cutter works in local mesh space, so moved pieces can still be sliced
-    // with the same generic triangle pipeline.
     const plane = this.transformPlaneToLocal(worldPlane, part.modelMatrix);
+
+    // Build the two half-mesh geometries by clipping against the transformed plane.
     const positive = this.clipGeometry(part.geometry, plane, true);
     const negative = this.clipGeometry(part.geometry, plane, false);
 
-    // If the plane only grazed the mesh, keep the original part instead of
-    // creating tiny invalid pieces.
     if (positive.geometry.indices.length < 3 || negative.geometry.indices.length < 3) {
       return [part];
     }
 
+    // Add a fill cap to each clipped side so the cut face is closed.
     this.addCap(positive, plane, false);
     this.addCap(negative, plane, true);
 
@@ -36,85 +36,116 @@ export class MeshCutter {
     const separation = vec3.scale(vec3.create(), plane.normal, 0.035);
     mat4.translate(a.modelMatrix, a.modelMatrix, separation);
     mat4.translate(b.modelMatrix, b.modelMatrix, vec3.negate(separation, separation));
+
     return [a, b];
   }
 
+  // Convert the plane from world space into the mesh's local model space.
   private transformPlaneToLocal(worldPlane: Plane, model: mat4): Plane {
     const inv = mat4.invert(mat4.create(), model) ?? mat4.create();
+
     const worldPoint = vec3.scale(vec3.create(), worldPlane.normal, -worldPlane.constant);
-    const localPoint4 = vec4.transformMat4(vec4.create(), vec4.fromValues(worldPoint[0], worldPoint[1], worldPoint[2], 1), inv);
+    const localPoint4 = vec4.transformMat4(
+      vec4.create(),
+      vec4.fromValues(worldPoint[0], worldPoint[1], worldPoint[2], 1),
+      inv,
+    );
+
     const normalMat = mat3.fromMat4(mat3.create(), model);
     mat3.transpose(normalMat, normalMat);
     const localNormal = vec3.transformMat3(vec3.create(), worldPlane.normal, normalMat);
     vec3.normalize(localNormal, localNormal);
+
     const localPoint = vec3.fromValues(localPoint4[0], localPoint4[1], localPoint4[2]);
+
     return { normal: localNormal, constant: -vec3.dot(localNormal, localPoint) };
   }
 
+  // Clip the entire mesh geometry against the plane and return the resulting
   private clipGeometry(geometry: MeshGeometry, plane: Plane, keepPositive: boolean): ClipResult {
     const positions: number[] = [];
     const indices: number[] = [];
     const capPoints: V[] = [];
     const source = geometry.positions;
 
-    // Each triangle is clipped independently. Cross-plane edges add points that
-    // later become the visible cap surface.
+    // Process each triangle in the source mesh.
     for (let i = 0; i < geometry.indices.length; i += 3) {
       const tri = [0, 1, 2].map((k) => {
         const idx = geometry.indices[i + k] * 3;
         return vec3.fromValues(source[idx], source[idx + 1], source[idx + 2]);
       });
+
+      // Clip the triangle polygon and collect resulting vertices.
       const clipped = this.clipPolygon(tri, plane, keepPositive, capPoints);
       if (clipped.length >= 3) {
         const base = positions.length / 3;
         for (const v of clipped) positions.push(v[0], v[1], v[2]);
-        for (let k = 1; k < clipped.length - 1; k++) indices.push(base, base + k, base + k + 1);
+
+        // Triangulate the clipped polygon with a simple fan from the first vertex.
+        for (let k = 1; k < clipped.length - 1; k++) {
+          indices.push(base, base + k, base + k + 1);
+        }
       }
     }
 
     return { geometry: compactGeometry(positions, indices), capPoints };
   }
 
+  // Clip a single triangle against the plane and return the polygon side to keep.
+  // Also record any edge intersection points for later use when capping the cut surface.
   private clipPolygon(poly: V[], plane: Plane, keepPositive: boolean, capPoints: V[]): V[] {
     const out: V[] = [];
+
     for (let i = 0; i < poly.length; i++) {
       const a = poly[i];
       const b = poly[(i + 1) % poly.length];
       const da = this.distance(plane, a);
       const db = this.distance(plane, b);
+
+      // Determine whether each vertex is kept based on the selected half-space.
       const ina = keepPositive ? da >= -this.epsilon : da <= this.epsilon;
       const inb = keepPositive ? db >= -this.epsilon : db <= this.epsilon;
 
       if (ina && inb) {
+        // Both vertices are inside the kept half-space.
         out.push(vec3.clone(b));
       } else if (ina && !inb) {
+        // Edge leaves the kept half-space: keep intersection point only.
         const p = this.intersection(a, b, da, db);
         out.push(p);
         capPoints.push(p);
       } else if (!ina && inb) {
+        // Edge enters the kept half-space: keep intersection plus inside vertex.
         const p = this.intersection(a, b, da, db);
         out.push(p, vec3.clone(b));
         capPoints.push(p);
       }
+      // If both vertices are outside, nothing is added for this edge.
     }
+
     return out;
   }
 
+  // Create a flat cap polygon from the collected intersection points.
   private addCap(result: ClipResult, plane: Plane, normalMatchesPlane: boolean): void {
     const unique = this.uniquePoints(result.capPoints);
     if (unique.length < 3) return;
 
+    // Compute the cap center by averaging unique intersection points.
     const center = vec3.create();
     for (const p of unique) vec3.add(center, center, p);
     vec3.scale(center, center, 1 / unique.length);
 
+    // Choose cap normal direction depending on which side we are filling.
     const normal = normalMatchesPlane ? vec3.clone(plane.normal) : vec3.negate(vec3.create(), plane.normal);
+
+    // Build an orthonormal basis to sort points around the cap.
     const tangent = Math.abs(normal[1]) < 0.92 ? vec3.fromValues(0, 1, 0) : vec3.fromValues(1, 0, 0);
     const u = vec3.cross(vec3.create(), tangent, normal);
     vec3.normalize(u, u);
     const v = vec3.cross(vec3.create(), normal, u);
-    // Sorting around the cap center gives us a clean triangle fan for the simple
-    // primitive meshes used in this raw WebGL2 assignment.
+
+    // Sort cap vertices in a consistent winding order around the center.
     unique.sort((a, b) => {
       const aa = Math.atan2(vec3.dot(vec3.subtract(vec3.create(), a, center), v), vec3.dot(vec3.subtract(vec3.create(), a, center), u));
       const bb = Math.atan2(vec3.dot(vec3.subtract(vec3.create(), b, center), v), vec3.dot(vec3.subtract(vec3.create(), b, center), u));
@@ -124,18 +155,24 @@ export class MeshCutter {
     const positions = Array.from(result.geometry.positions);
     const indices = Array.from(result.geometry.indices);
     const centerIndex = positions.length / 3;
+
+    // Add the cap center vertex first, then the sorted boundary vertices.
     positions.push(center[0], center[1], center[2]);
     const start = positions.length / 3;
     for (const p of unique) positions.push(p[0], p[1], p[2]);
+
+    // Connect the cap as a triangle fan with the correct winding direction.
     for (let i = 0; i < unique.length; i++) {
       const a = start + i;
       const b = start + ((i + 1) % unique.length);
       if (normalMatchesPlane) indices.push(centerIndex, b, a);
       else indices.push(centerIndex, a, b);
     }
+
     result.geometry = compactGeometry(positions, indices);
   }
 
+  // Remove duplicate intersection points that are within a small tolerance.
   private uniquePoints(points: V[]): V[] {
     const unique: V[] = [];
     for (const p of points) {
@@ -144,10 +181,12 @@ export class MeshCutter {
     return unique;
   }
 
+  // Signed distance from a point to the plane.
   private distance(plane: Plane, p: V): number {
     return vec3.dot(plane.normal, p) + plane.constant;
   }
 
+  // Compute the intersection point of an edge with the plane.
   private intersection(a: V, b: V, da: number, db: number): V {
     const t = da / (da - db);
     return vec3.lerp(vec3.create(), a, b, Math.min(1, Math.max(0, t)));
